@@ -66,6 +66,7 @@ async function DashboardContent() {
 
   const start = Number(prog.starting_pr_kg);
   const target = Number(prog.target_pr_kg);
+  // TODO(docs/FUTURE_IMPROVEMENTS.md #1): this counts e1RM from every exercise, not only bench press.
   const best = Math.max(start, (bestSet as { calculated_e1rm: number } | null)?.calculated_e1rm ?? 0);
   const pct = target > start ? Math.min(100, Math.max(0, ((best - start) / (target - start)) * 100)) : 100;
   const days = prog.split_structure?.days ?? [];

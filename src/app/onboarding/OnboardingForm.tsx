@@ -55,13 +55,11 @@ export function OnboardingForm({
     setLoading(true);
     const supabase = createClient();
 
-    const { error: profileError } = await supabase.from("profiles").upsert({
-      id: userId,
-      bodyweight_kg: bw,
-      training_start_date: startDate,
-      current_pr_kg: cur,
-      target_pr_kg: tgt,
-    });
+    // The profile row is created by the signup trigger, so we only update it.
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .update({ bodyweight_kg: bw, training_start_date: startDate, updated_at: new Date().toISOString() })
+      .eq("id", userId);
     if (profileError) {
       setLoading(false);
       return setError(`No pudimos guardar tu perfil. (${profileError.message})`);
@@ -74,6 +72,10 @@ export function OnboardingForm({
       program_name: loadSplit ? DEFAULT_SPLIT.name : selected?.name ?? "Mi programa",
       is_active: true,
       split_structure: loadSplit ? DEFAULT_SPLIT : { ...DEFAULT_SPLIT, days: [] },
+      main_lift_name: "Press de Banca Plano",
+      starting_pr_kg: cur,
+      current_pr_kg: cur,
+      target_pr_kg: tgt,
     });
     setLoading(false);
     if (programError) {

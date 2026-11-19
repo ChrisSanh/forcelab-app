@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { BedDouble, ChevronRight, Dumbbell, Target } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import type { Profile, UserProgram, WorkoutLog } from "@/lib/types";
+import type { UserProgram, WorkoutLog } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress, ProgressIndicator, ProgressTrack } from "@/components/ui/progress";
@@ -33,15 +33,12 @@ async function DashboardContent() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [{ data: profile }, { data: program }, { data: logs }, { data: bestSet }] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("id, bodyweight_kg, training_start_date, current_pr_kg, target_pr_kg")
-      .eq("id", user.id)
-      .maybeSingle(),
+  const [{ data: program }, { data: logs }, { data: bestSet }] = await Promise.all([
     supabase
       .from("user_programs")
-      .select("id, user_id, methodology_id, program_name, is_active, split_structure, created_at")
+      .select(
+        "id, user_id, methodology_id, program_name, is_active, split_structure, main_lift_name, starting_pr_kg, current_pr_kg, target_pr_kg, created_at",
+      )
       .eq("user_id", user.id)
       .eq("is_active", true)
       .order("created_at", { ascending: false })
@@ -64,12 +61,11 @@ async function DashboardContent() {
       .maybeSingle(),
   ]);
 
-  const p = profile as Profile | null;
   const prog = program as UserProgram | null;
-  if (!p || p.current_pr_kg == null || !prog) redirect("/onboarding");
+  if (!prog) redirect("/onboarding");
 
-  const start = p.current_pr_kg;
-  const target = p.target_pr_kg ?? start;
+  const start = Number(prog.starting_pr_kg);
+  const target = Number(prog.target_pr_kg);
   const best = Math.max(start, (bestSet as { calculated_e1rm: number } | null)?.calculated_e1rm ?? 0);
   const pct = target > start ? Math.min(100, Math.max(0, ((best - start) / (target - start)) * 100)) : 100;
   const days = prog.split_structure?.days ?? [];

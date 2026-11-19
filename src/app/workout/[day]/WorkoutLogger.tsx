@@ -6,7 +6,8 @@ import { useMemo, useState } from "react";
 import { ArrowLeft, Check, Loader2, Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { calculateE1rm, loadForPercent } from "@/lib/math/e1rm";
-import type { PresetDay, PresetExercise } from "@/lib/presets/defaultSplit";
+import type { DayType, PresetDay, PresetExercise } from "@/lib/presets/defaultSplit";
+import type { BarSpeed, SetCategory } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,7 +20,22 @@ interface SetDraft {
   weight: string;
   reps: string;
   rir: number | null;
-  velocity: number | null;
+  velocity: BarSpeed | null;
+}
+
+const CATEGORY_BY_DAY: Record<DayType, SetCategory> = {
+  push_bilbo: "explosive_bilbo",
+  push_heavy: "heavy_strength",
+  upper: "hypertrophy",
+  lower: "hypertrophy",
+  pull: "hypertrophy",
+  leg: "hypertrophy",
+  rest: "hypertrophy",
+};
+
+function categoryFor(day: PresetDay, exercise: PresetExercise): SetCategory {
+  // Only the main lift follows the day's methodology; accessories are hypertrophy work.
+  return exercise.isMainLift ? CATEGORY_BY_DAY[day.type] : "hypertrophy";
 }
 
 interface SavedSet {
@@ -110,11 +126,12 @@ export function WorkoutLogger({
       workout_id: id,
       user_id: userId,
       exercise_name: exercise.label,
+      set_category: categoryFor(day, exercise),
       set_number: setNumber,
       weight_kg: weight,
       reps,
       rir: draft.rir,
-      perceived_velocity: draft.velocity,
+      bar_speed: draft.velocity,
       calculated_e1rm: e1rm,
     });
     setSavingKey(null);

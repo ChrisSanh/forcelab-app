@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import type { BarSpeed } from "@/lib/types";
 
 export interface ScaleSelectorProps {
   label: string;
@@ -51,13 +52,41 @@ export function RirSelector(props: Omit<ScaleSelectorProps, "label" | "values" |
   );
 }
 
-export function VelocitySelector(props: Omit<ScaleSelectorProps, "label" | "values" | "hint">) {
+export const BAR_SPEED_OPTIONS: { value: BarSpeed; label: string }[] = [
+  { value: "grind", label: "Lenta" },
+  { value: "moderate", label: "Media" },
+  { value: "fast", label: "Rápida" },
+  { value: "explosive", label: "Explosiva" },
+];
+
+export function VelocitySelector({
+  value,
+  onChange,
+}: {
+  value: BarSpeed | null;
+  onChange: (value: BarSpeed | null) => void;
+}) {
   return (
-    <ScaleSelector
-      {...props}
-      label="Velocidad percibida"
-      values={[1, 2, 3, 4, 5]}
-      hint="1 = lenta, 5 = explosiva"
-    />
+    <div className="flex flex-col gap-1">
+      <span className="text-xs font-medium text-muted-foreground">Velocidad percibida de la barra</span>
+      <div className="grid grid-cols-4 gap-1">
+        {BAR_SPEED_OPTIONS.map((o) => (
+          <button
+            key={o.value}
+            type="button"
+            aria-pressed={value === o.value}
+            onClick={() => onChange(value === o.value ? null : o.value)}
+            className={cn(
+              "h-11 rounded-lg border text-sm font-semibold transition-colors",
+              value === o.value
+                ? "border-primary bg-primary text-primary-foreground"
+                : "bg-secondary/60 text-foreground hover:bg-secondary",
+            )}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }

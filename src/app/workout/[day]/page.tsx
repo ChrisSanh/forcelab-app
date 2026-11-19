@@ -27,17 +27,14 @@ async function WorkoutContent({ params }: { params: Promise<{ day: string }> }) 
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [{ data: program }, { data: profile }] = await Promise.all([
-    supabase
-      .from("user_programs")
-      .select("id, user_id, methodology_id, program_name, is_active, split_structure, created_at")
-      .eq("user_id", user.id)
-      .eq("is_active", true)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    supabase.from("profiles").select("current_pr_kg").eq("id", user.id).maybeSingle(),
-  ]);
+  const { data: program } = await supabase
+    .from("user_programs")
+    .select("id, user_id, methodology_id, program_name, is_active, split_structure, current_pr_kg, created_at")
+    .eq("user_id", user.id)
+    .eq("is_active", true)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
   const prog = program as UserProgram | null;
   if (!prog?.split_structure) redirect("/onboarding");
@@ -50,7 +47,7 @@ async function WorkoutContent({ params }: { params: Promise<{ day: string }> }) 
       userId={user.id}
       programId={prog.id}
       day={dayConfig}
-      benchPr={(profile as { current_pr_kg: number | null } | null)?.current_pr_kg ?? null}
+      benchPr={prog.current_pr_kg == null ? null : Number(prog.current_pr_kg)}
     />
   );
 }

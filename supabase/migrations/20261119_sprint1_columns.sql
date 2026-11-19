@@ -1,0 +1,6 @@
+-- ForceLab Sprint 1: NO schema changes are required.
+-- The app was adapted to the existing schema (profiles, user_programs, workout_logs, set_logs):
+--   * PRs live in user_programs (starting_pr_kg, current_pr_kg, target_pr_kg).
+--   * The split preset is stored in user_programs.split_structure (JSONB).
+--   * set_logs uses set_category (required) and bar_speed (text enum).
+-- Nothing to run. This file is kept only as documentation.

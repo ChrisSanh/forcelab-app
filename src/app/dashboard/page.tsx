@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { UserProgram, WorkoutLog } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress, ProgressIndicator, ProgressTrack } from "@/components/ui/progress";
+import { Progress } from "@/components/ui/progress";
 import { SignOutButton } from "./SignOutButton";
 
 // Authenticated route: it reads the session, so it is allowed to block navigation.
@@ -95,11 +95,7 @@ async function DashboardContent() {
             </span>
             <span className="text-sm text-muted-foreground">Meta {target} kg</span>
           </div>
-          <Progress value={pct}>
-            <ProgressTrack>
-              <ProgressIndicator />
-            </ProgressTrack>
-          </Progress>
+          <Progress value={pct} aria-label="Progreso hacia tu PR objetivo" />
           <div className="flex justify-between text-xs text-muted-foreground">
             <span>Inicio {start} kg</span>
             <span>{pct.toFixed(0)}%</span>

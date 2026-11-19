@@ -38,7 +38,7 @@ async function DashboardContent() {
       .maybeSingle(),
     supabase
       .from("user_programs")
-      .select("id, user_id, methodology_id, program_name, is_active, routine, created_at")
+      .select("id, user_id, methodology_id, program_name, is_active, split_structure, created_at")
       .eq("user_id", user.id)
       .eq("is_active", true)
       .order("created_at", { ascending: false })
@@ -69,7 +69,7 @@ async function DashboardContent() {
   const target = p.target_pr_kg ?? start;
   const best = Math.max(start, (bestSet as { calculated_e1rm: number } | null)?.calculated_e1rm ?? 0);
   const pct = target > start ? Math.min(100, Math.max(0, ((best - start) / (target - start)) * 100)) : 100;
-  const days = prog.routine?.days ?? [];
+  const days = prog.split_structure?.days ?? [];
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-col gap-4 px-4 py-6">

@@ -22,7 +22,7 @@ export interface UserProgram {
   methodology_id: string | null;
   program_name: string | null;
   is_active: boolean;
-  routine: SplitPreset | null;
+  split_structure: SplitPreset | null;
   created_at: string;
 }
 

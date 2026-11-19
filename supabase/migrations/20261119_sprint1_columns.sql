@@ -7,9 +7,7 @@ alter table public.profiles
   add column if not exists current_pr_kg numeric(5,1),
   add column if not exists target_pr_kg numeric(5,1);
 
--- Active program: the routine (split) loaded from the preset, stored as JSON.
-alter table public.user_programs
-  add column if not exists routine jsonb;
+-- user_programs.split_structure already exists (NOT NULL); the preset is stored there as JSON.
 
 -- Set logs: perceived bar velocity (1 = slow ... 5 = explosive) and the live e1RM.
 alter table public.set_logs

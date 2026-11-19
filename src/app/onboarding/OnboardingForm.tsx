@@ -73,7 +73,7 @@ export function OnboardingForm({
       methodology_id: methodologyId,
       program_name: loadSplit ? DEFAULT_SPLIT.name : selected?.name ?? "Mi programa",
       is_active: true,
-      routine: loadSplit ? DEFAULT_SPLIT : null,
+      split_structure: loadSplit ? DEFAULT_SPLIT : { ...DEFAULT_SPLIT, days: [] },
     });
     setLoading(false);
     if (programError) {

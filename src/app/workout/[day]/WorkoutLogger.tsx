@@ -80,7 +80,8 @@ export function WorkoutLogger({
       .select("id")
       .single();
     if (error || !data) {
-      setError(`No pudimos iniciar el entrenamiento. (${error?.message ?? "sin datos"})`);
+      console.error("workout_logs insert failed", error);
+      setError(`No pudimos iniciar el entrenamiento. (${error?.message ?? "sin datos"}${error?.details ? ` — ${error.details}` : ""})`);
       return null;
     }
     setWorkoutId(data.id);
@@ -117,7 +118,10 @@ export function WorkoutLogger({
       calculated_e1rm: e1rm,
     });
     setSavingKey(null);
-    if (error) return setError(`No pudimos guardar la serie. (${error.message})`);
+    if (error) {
+      console.error("set_logs insert failed", error);
+      return setError(`No pudimos guardar la serie. (${error.message}${error.details ? ` — ${error.details}` : ""})`);
+    }
 
     setSaved((s) => ({
       ...s,
@@ -135,7 +139,7 @@ export function WorkoutLogger({
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-md flex-col gap-4 px-4 pt-4 pb-28">
+    <main className="mx-auto flex w-full max-w-md flex-col gap-4 px-4 pt-4 pb-72">
       <header className="flex items-center gap-2">
         <Link href="/dashboard" aria-label="Volver al panel" className="rounded-lg p-2 hover:bg-secondary">
           <ArrowLeft className="size-5" />

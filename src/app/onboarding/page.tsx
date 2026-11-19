@@ -4,6 +4,9 @@ import { createClient } from "@/lib/supabase/server";
 import type { Methodology } from "@/lib/types";
 import { OnboardingForm } from "./OnboardingForm";
 
+// Authenticated route: it reads the session, so it is allowed to block navigation.
+export const instant = false;
+
 export const metadata = { title: "Configura tu perfil · ForceLab" };
 
 export default function OnboardingPage() {

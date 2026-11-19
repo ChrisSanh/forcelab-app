@@ -5,6 +5,9 @@ import type { UserProgram } from "@/lib/types";
 import { findDay } from "@/lib/presets/defaultSplit";
 import { WorkoutLogger } from "./WorkoutLogger";
 
+// Authenticated route: it reads the session, so it is allowed to block navigation.
+export const instant = false;
+
 export const metadata = { title: "Entrenamiento · ForceLab" };
 
 export default function WorkoutPage({ params }: { params: Promise<{ day: string }> }) {

@@ -9,6 +9,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress, ProgressIndicator, ProgressTrack } from "@/components/ui/progress";
 import { SignOutButton } from "./SignOutButton";
 
+// Authenticated route: it reads the session, so it is allowed to block navigation.
+export const instant = false;
+
 export const metadata = { title: "Panel · ForceLab" };
 
 function formatDate(iso: string) {

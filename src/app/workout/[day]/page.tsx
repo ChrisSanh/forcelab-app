@@ -3,6 +3,8 @@ import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { UserProgram } from "@/lib/types";
 import { findDay } from "@/lib/presets/defaultSplit";
+import { getDayRecommendations } from "@/lib/progression/recommendations";
+import { describePrescription } from "@/lib/progression/messages";
 import { WorkoutLogger } from "./WorkoutLogger";
 
 // Authenticated route: it reads the session, so it is allowed to block navigation.
@@ -42,12 +44,20 @@ async function WorkoutContent({ params }: { params: Promise<{ day: string }> }) 
   const dayConfig = findDay(prog.split_structure, day);
   if (!dayConfig || dayConfig.type === "rest") notFound();
 
+  const recommendations = await getDayRecommendations(supabase, user.id, dayConfig);
+
   return (
     <WorkoutLogger
       userId={user.id}
       programId={prog.id}
       day={dayConfig}
       benchPr={prog.current_pr_kg == null ? null : Number(prog.current_pr_kg)}
+      recommendations={recommendations.map((r) => ({
+        exerciseName: r.exerciseName,
+        goalId: r.goalId,
+        prescription: r.prescription,
+        card: describePrescription(r.prescription),
+      }))}
     />
   );
 }

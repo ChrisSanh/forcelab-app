@@ -5,6 +5,7 @@ import { LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 
+/** Sign-out control for the panel header. */
 export function SignOutButton() {
   const router = useRouter();
   return (

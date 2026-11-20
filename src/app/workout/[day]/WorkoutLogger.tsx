@@ -6,6 +6,8 @@ import { useMemo, useState } from "react";
 import { ArrowLeft, Check, Loader2, Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { calculateE1rm, loadForPercent } from "@/lib/math/e1rm";
+import { prescribeBilbo, usesCycles } from "@/lib/math/progressionEngine";
+import { advanceCycle } from "@/lib/progression/goalActions";
 import type { DayType, PresetDay, PresetExercise } from "@/lib/presets/defaultSplit";
 import type { BarSpeed, SetCategory } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +15,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RecommendationCard } from "@/components/workout/RecommendationCard";
 import { RestTimer } from "@/components/workout/RestTimer";
+import type { Prescription } from "@/lib/math/progressionEngine";
+import type { Recommendation } from "@/lib/progression/messages";
 import { RirSelector, VelocitySelector } from "@/components/workout/ScaleSelector";
 
 interface SetDraft {
@@ -54,20 +59,36 @@ function emptyDraft(rir: number | null): SetDraft {
   return { weight: "", reps: "", rir, velocity: null };
 }
 
+export interface ExerciseRecommendationView {
+  exerciseName: string;
+  goalId: string;
+  prescription: Prescription;
+  card: Recommendation;
+}
+
 export function WorkoutLogger({
   userId,
   programId,
   day,
   benchPr,
+  recommendations,
 }: {
   userId: string;
   programId: string;
   day: PresetDay;
   benchPr: number | null;
+  recommendations: ExerciseRecommendationView[];
 }) {
   const router = useRouter();
+  const recommendationFor = (name: string) => recommendations.find((r) => r.exerciseName === name);
   const [drafts, setDrafts] = useState<Record<string, SetDraft>>(() =>
-    Object.fromEntries(day.exercises.map((e) => [e.name, emptyDraft(e.scheme.targetRir ?? null)])),
+    Object.fromEntries(
+      day.exercises.map((e) => {
+        // Pre-fill the suggested load so the user only has to log reps at the gym.
+        const w = recommendations.find((r) => r.exerciseName === e.name)?.prescription.weightKg;
+        return [e.name, { ...emptyDraft(e.scheme.targetRir ?? null), weight: w != null ? String(w) : "" }];
+      }),
+    ),
   );
   const [saved, setSaved] = useState<Record<string, SavedSet[]>>({});
   const [workoutId, setWorkoutId] = useState<string | null>(null);
@@ -150,7 +171,36 @@ export function WorkoutLogger({
   }
 
   async function finish() {
+    // Guard against double taps: advancing a cycle twice would skip a week.
+    if (finishing) return;
     setFinishing(true);
+    const supabase = createClient();
+
+    // Advance the Bilbo / heavy-block cycle of each exercise that was actually trained today.
+    for (const rec of recommendations) {
+      const type = rec.prescription.progressionType;
+      const logged = saved[rec.exerciseName];
+      if (!usesCycles(type) || !logged || logged.length === 0) continue;
+
+      const last = logged[logged.length - 1];
+      let status = rec.prescription.status;
+      let nextWeight: number | null = rec.prescription.weightKg;
+
+      if (type === "bilbo_cycle") {
+        const next = prescribeBilbo({
+          currentPrKg: rec.prescription.weightKg ?? 0,
+          cycleActive: true,
+          lastSet: { weightKg: last.weightKg, reps: last.reps, rir: last.rir },
+        });
+        status = next.status;
+        nextWeight = next.weightKg;
+      } else {
+        // Heavy blocks: the next session moves to the next week; week 4 closes the block.
+        status = rec.prescription.sequence === 4 ? "completed" : "active";
+      }
+      await advanceCycle(supabase, rec.goalId, status, nextWeight);
+    }
+
     router.push("/dashboard");
     router.refresh();
   }
@@ -175,10 +225,13 @@ export function WorkoutLogger({
           reps: toNumber(draft.reps) ?? 0,
           rir: draft.rir ?? 0,
         });
+        const recommendation = recommendationFor(exercise.name);
+        // A goal-driven prescription wins; the percent-of-PR hint is only the fallback.
         const suggested =
-          exercise.isMainLift && exercise.scheme.percent1rm && benchPr
+          recommendation?.prescription.weightKg ??
+          (exercise.isMainLift && exercise.scheme.percent1rm && benchPr
             ? loadForPercent(benchPr, exercise.scheme.percent1rm)
-            : null;
+            : null);
 
         return (
           <Card key={exercise.name}>
@@ -193,6 +246,7 @@ export function WorkoutLogger({
               {exercise.notes ? <p className="text-xs text-muted-foreground">{exercise.notes}</p> : null}
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
+              {recommendation ? <RecommendationCard recommendation={recommendation.card} /> : null}
               {sets.length > 0 ? (
                 <ul className="flex flex-col gap-1">
                   {sets.map((s, i) => (

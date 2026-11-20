@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import { calculateE1rm, loadForPercent } from "@/lib/math/e1rm";
 import { prescribeBilbo, usesCycles } from "@/lib/math/progressionEngine";
 import { advanceCycle } from "@/lib/progression/goalActions";
+import { firstError, setLogSchema } from "@/lib/validation/schemas";
 import type { DayType, PresetDay, PresetExercise } from "@/lib/presets/defaultSplit";
 import type { BarSpeed, SetCategory } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
@@ -127,33 +128,50 @@ export function WorkoutLogger({
 
   async function saveSet(exercise: PresetExercise) {
     const draft = drafts[exercise.name];
-    const weight = toNumber(draft.weight);
-    const reps = toNumber(draft.reps);
-    if (weight == null || weight <= 0 || reps == null || reps < 1 || !Number.isInteger(reps)) {
-      setError("Ingresa un peso y repeticiones válidos.");
+    const setNumber = (saved[exercise.name]?.length ?? 0) + 1;
+    const e1rm = calculateE1rm({
+      weightKg: toNumber(draft.weight) ?? 0,
+      reps: toNumber(draft.reps) ?? 0,
+      rir: draft.rir ?? 0,
+    });
+
+    // Validate everything that will be written, before touching the database.
+    const parsed = setLogSchema.safeParse({
+      exerciseName: exercise.label,
+      setCategory: categoryFor(day, exercise),
+      setNumber,
+      weightKg: draft.weight,
+      reps: draft.reps,
+      rir: draft.rir,
+      barSpeed: draft.velocity,
+      calculatedE1rm: e1rm,
+    });
+    if (!parsed.success) {
+      setError(firstError(parsed));
       return;
     }
+    const valid = parsed.data;
+    const weight = valid.weightKg as number;
+    const reps = valid.reps as number;
+
     setError(null);
     setSavingKey(exercise.name);
 
     const id = await ensureWorkout();
     if (!id) return setSavingKey(null);
 
-    const e1rm = calculateE1rm({ weightKg: weight, reps, rir: draft.rir ?? 0 });
-    const setNumber = (saved[exercise.name]?.length ?? 0) + 1;
-
     const supabase = createClient();
     const { error } = await supabase.from("set_logs").insert({
       workout_id: id,
       user_id: userId,
-      exercise_name: exercise.label,
-      set_category: categoryFor(day, exercise),
-      set_number: setNumber,
+      exercise_name: valid.exerciseName,
+      set_category: valid.setCategory,
+      set_number: valid.setNumber as number,
       weight_kg: weight,
       reps,
-      rir: draft.rir,
-      bar_speed: draft.velocity,
-      calculated_e1rm: e1rm,
+      rir: valid.rir ?? null,
+      bar_speed: valid.barSpeed ?? null,
+      calculated_e1rm: (valid.calculatedE1rm as number | null | undefined) ?? null,
     });
     setSavingKey(null);
     if (error) {

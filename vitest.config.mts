@@ -1,0 +1,30 @@
+import { fileURLToPath } from "node:url";
+import { defineConfig } from "vitest/config";
+
+export default defineConfig({
+  resolve: {
+    alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
+  },
+  test: {
+    environment: "node",
+    include: ["src/**/*.{test,spec}.ts"],
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "lcov"],
+      reportsDirectory: "coverage",
+      // Scientific / business logic and validation: the code ISO/IEC 25010 asks us to prove.
+      include: [
+        "src/lib/math/**/*.ts",
+        "src/lib/progression/{analytics,matching}.ts",
+        "src/lib/validation/**/*.ts",
+      ],
+      exclude: ["**/*.test.ts", "**/*.spec.ts", "**/__tests__/**"],
+      thresholds: {
+        lines: 95,
+        functions: 95,
+        statements: 95,
+        branches: 90,
+      },
+    },
+  },
+});

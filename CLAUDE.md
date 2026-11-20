@@ -61,3 +61,38 @@ Pure functions (no I/O, no clock); Spanish text lives in `src/lib/progression/me
 - `linear_progression`: target sets x `rep_range_max` completed -> +2.5 kg.
 - Goals and sets are linked by normalized exercise name (`src/lib/progression/matching.ts`).
 - Tests: `npm test` (Vitest). Every change to the engine needs a test.
+
+## 7. Quality & Security Standards (ISO/IEC 25010 and DevSecOps)
+
+These rules are mandatory. A change that breaks one of them is not done.
+
+### 7.1 ISO/IEC 25010 product quality
+The product is measured against the eight quality characteristics of ISO/IEC 25010:
+functional suitability, performance efficiency, compatibility, usability, reliability,
+security, maintainability and portability. The mapping to concrete controls and evidence
+lives in `docs/ISO_25010_AND_SECURITY.md`; keep it up to date when a control changes.
+
+### 7.2 Security rules (OWASP)
+- **Validate every user input with Zod** (`src/lib/validation/schemas.ts`) before it reaches
+  Supabase. Limits mirror the database (`numeric(5,2)`, CHECK constraints). New forms need a schema and tests.
+- **Never use `dangerouslySetInnerHTML`.** Render user text as React text nodes only.
+- **Strict RLS on every table.** A new table ships with `ENABLE ROW LEVEL SECURITY` and a policy
+  scoped to `auth.uid()` in the same migration. Never use the service-role key in client code.
+- **No hardcoded secrets.** Keys come from environment variables (`.env.local`, Vercel, GitHub Secrets).
+  Only `NEXT_PUBLIC_*` values may reach the browser. `.env*` and `ApiKeys.txt` stay out of git.
+- **Security headers live in `next.config.ts`** (CSP, HSTS, X-Frame-Options, nosniff, Referrer-Policy,
+  Permissions-Policy). Loosening one needs a written reason in `docs/ISO_25010_AND_SECURITY.md`.
+- Server code validates the session with `supabase.auth.getUser()`, never with `getSession()` alone.
+
+### 7.3 Testing rules
+- **All mathematical and scientific logic has unit tests** (`src/lib/math/**`, validation, analytics).
+  Tests for `src/lib/math` live in `src/lib/math/__tests__/`.
+- Cover the edge cases of each rule: both sides of every threshold (e.g. 14 vs 15 Bilbo reps,
+  RIR 0 vs 1, 10 vs 11 effective reps), invalid input and empty history.
+- Coverage thresholds are enforced by `vitest.config.mts` (95% lines/functions/statements, 90% branches).
+  Never lower a threshold to make a build pass.
+
+### 7.4 Quality gates (CI: `.github/workflows/devsecops-ci.yml`)
+Runs on every push and pull request to `develop` and `main`. All of these must pass locally before a commit:
+`npm run lint`, `npm run typecheck`, `npm run test:coverage`, `npm run build`.
+CI also runs `npm audit --audit-level=high`, gitleaks (secrets), Semgrep (SAST) and SonarCloud.

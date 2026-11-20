@@ -3,7 +3,11 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { BedDouble, ChevronRight, Dumbbell, Target } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import type { UserProgram, WorkoutLog } from "@/lib/types";
+import type { UserGoal, UserProgram, WorkoutLog } from "@/lib/types";
+import type { SetPoint } from "@/lib/progression/analytics";
+import { sameExercise } from "@/lib/progression/matching";
+import { EvolutionChart } from "./EvolutionChart";
+import { GoalSummaryCard } from "./GoalSummaryCard";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -33,7 +37,7 @@ async function DashboardContent() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [{ data: program }, { data: logs }, { data: bestSet }] = await Promise.all([
+  const [{ data: program }, { data: logs }, { data: setRows }, { data: goalRows }] = await Promise.all([
     supabase
       .from("user_programs")
       .select(
@@ -53,23 +57,43 @@ async function DashboardContent() {
       .limit(5),
     supabase
       .from("set_logs")
-      .select("calculated_e1rm")
+      .select("workout_id, exercise_name, weight_kg, reps, calculated_e1rm, created_at")
       .eq("user_id", user.id)
-      .not("calculated_e1rm", "is", null)
-      .order("calculated_e1rm", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+      .order("created_at", { ascending: true })
+      .limit(2000),
+    supabase
+      .from("user_goals")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("is_active", true)
+      .order("created_at", { ascending: true }),
   ]);
 
   const prog = program as UserProgram | null;
   if (!prog) redirect("/onboarding");
 
+  const sets = (setRows ?? []) as SetPoint[];
+  const goals = (goalRows ?? []) as UserGoal[];
+
   const start = Number(prog.starting_pr_kg);
   const target = Number(prog.target_pr_kg);
-  // TODO(docs/FUTURE_IMPROVEMENTS.md #1): this counts e1RM from every exercise, not only bench press.
-  const best = Math.max(start, (bestSet as { calculated_e1rm: number } | null)?.calculated_e1rm ?? 0);
+  // Only bench press sets count toward the bench PR (see docs/FUTURE_IMPROVEMENTS.md #1).
+  const benchE1rm = sets
+    .filter((s) => s.calculated_e1rm != null && sameExercise(prog.main_lift_name, s.exercise_name))
+    .reduce((max, s) => Math.max(max, Number(s.calculated_e1rm)), 0);
+  const best = Math.max(start, Number(prog.current_pr_kg), benchE1rm);
   const pct = target > start ? Math.min(100, Math.max(0, ((best - start) / (target - start)) * 100)) : 100;
   const days = prog.split_structure?.days ?? [];
+
+  // Reps of the most recent session of each goal, used for the hypertrophy level.
+  const lastRepsFor = (goal: UserGoal): number[] => {
+    const own = sets.filter((s) => sameExercise(goal.exercise_name, s.exercise_name));
+    if (own.length === 0) return [];
+    const lastWorkout = own[own.length - 1].workout_id;
+    const lastSets = own.filter((s) => s.workout_id === lastWorkout);
+    const top = Math.max(...lastSets.map((s) => Number(s.weight_kg)));
+    return lastSets.filter((s) => Number(s.weight_kg) === top).map((s) => s.reps);
+  };
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-col gap-4 px-4 py-6">
@@ -87,7 +111,7 @@ async function DashboardContent() {
             <Target className="size-5 text-primary" aria-hidden />
             Progreso hacia tu PR
           </CardTitle>
-          <CardDescription>Press de banca · e1RM estimado</CardDescription>
+          <CardDescription>{prog.main_lift_name} · e1RM estimado</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <div className="flex items-end justify-between">
@@ -104,6 +128,30 @@ async function DashboardContent() {
           </div>
         </CardContent>
       </Card>
+
+      <EvolutionChart sets={sets} />
+
+      <section className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-muted-foreground">Mis metas</h2>
+          <Link href="/goals" className="text-sm text-primary underline-offset-4 hover:underline">
+            Gestionar
+          </Link>
+        </div>
+        {goals.length === 0 ? (
+          <Link href="/goals" className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground hover:bg-secondary/40">
+            Aún no tienes metas. Crea una para recibir recomendaciones de carga.
+          </Link>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {goals.map((g) => (
+              <li key={g.id}>
+                <GoalSummaryCard goal={g} lastReps={lastRepsFor(g)} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-muted-foreground">

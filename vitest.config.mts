@@ -15,7 +15,7 @@ export default defineConfig({
       // Scientific / business logic and validation: the code ISO/IEC 25010 asks us to prove.
       include: [
         "src/lib/math/**/*.ts",
-        "src/lib/progression/{analytics,matching}.ts",
+        "src/lib/progression/{analytics,matching,goalActions}.ts",
         "src/lib/validation/**/*.ts",
       ],
       exclude: ["**/*.test.ts", "**/*.spec.ts", "**/__tests__/**"],

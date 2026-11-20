@@ -17,22 +17,27 @@ concurrency:
 
 env:
   NODE_VERSION: "24"
+  # Pinned tool versions: the pipeline must not change under our feet.
+  SEMGREP_VERSION: "1.186.0"
 
+# Third-party actions are pinned to a full commit SHA (supply-chain hardening).
+# The comment on each line is the tag or branch the SHA was resolved from.
 jobs:
   quality-and-tests:
     name: Quality and tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
-      - name: Install dependencies (clean)
-        run: npm ci
+      # --ignore-scripts: dependency lifecycle scripts never run in CI.
+      - name: Install dependencies (clean, no lifecycle scripts)
+        run: npm ci --ignore-scripts
 
       - name: Lint
         run: npm run lint
@@ -53,7 +58,7 @@ jobs:
 
       - name: Upload coverage report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: coverage-lcov
           path: coverage/
@@ -64,31 +69,34 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0 # gitleaks scans the history
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
-      - name: Install dependencies (clean)
-        run: npm ci
+      - name: Install dependencies (clean, no lifecycle scripts)
+        run: npm ci --ignore-scripts
 
       - name: Dependency audit (SCA)
         run: npm audit --audit-level=high
 
       - name: Secret scanning (gitleaks)
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Only required for organization-owned repositories.
           GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
 
+      # Pinned version and wheels only: pip never runs a source build or setup script.
+      - name: Install Semgrep (pinned, wheels only)
+        run: python3 -m pip install --quiet --only-binary :all: "semgrep==${SEMGREP_VERSION}"
+
       - name: SAST (Semgrep)
         run: |
-          python3 -m pip install --quiet semgrep
           semgrep scan \
             --config p/security-audit \
             --config p/typescript \
@@ -103,17 +111,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0 # Sonar needs full history for blame and new-code detection
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
-      - name: Install dependencies (clean)
-        run: npm ci
+      - name: Install dependencies (clean, no lifecycle scripts)
+        run: npm ci --ignore-scripts
 
       - name: Unit tests with coverage
         run: npm run test:coverage
@@ -135,6 +143,6 @@ jobs:
       # Strict when the token exists: a failed scan or Quality Gate fails the job.
       - name: SonarCloud scan
         if: steps.sonar-token.outputs.present == 'true'
-        uses: SonarSource/sonarcloud-github-action@master
+        uses: SonarSource/sonarcloud-github-action@ba3875ecf642b2129de2b589510c81a8b53dbf4e # master
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

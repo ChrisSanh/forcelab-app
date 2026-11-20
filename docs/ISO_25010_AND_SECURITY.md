@@ -54,7 +54,7 @@ analytics and matching modules. UI components are not part of the threshold.
 | **A05 Security misconfiguration** | Security headers in `next.config.ts`; `X-Powered-By` removed; least-privilege CI permissions. | `next.config.ts`, `devsecops-ci.yml` |
 | **A06 Vulnerable components** | `npm audit` in CI; dependency set kept small. | CI job `security-audit` |
 | **A07 Authentication failures** | Supabase Auth; the server validates the session with `getUser()`, never with `getSession()` alone. | `middleware.ts` |
-| **A08 Software and data integrity** | `npm ci` from a lockfile in CI; Semgrep and gitleaks on every push. | CI |
+| **A08 Software and data integrity** | `npm ci --ignore-scripts` from a lockfile (dependency lifecycle scripts never run in CI); third-party actions pinned to a full commit SHA; Semgrep pinned to an exact version; gitleaks on every push. | CI |
 | **A09 Logging and monitoring** | Partial: database errors are logged to the console and shown to the user. No central monitoring yet. | Known gap |
 | **A10 SSRF** | Not applicable: the application makes no server-side requests to user-supplied URLs. | n/a |
 
@@ -115,7 +115,7 @@ permissions.
 ```text
 push / pull_request (develop, main)
    |
-   +-- quality-and-tests : npm ci -> lint -> typecheck -> test:coverage -> build
+   +-- quality-and-tests : npm ci --ignore-scripts -> lint -> typecheck -> test:coverage -> build
    |
    +-- security-audit    : npm audit (high) -> gitleaks (secrets) -> Semgrep (SAST)
    |
@@ -146,8 +146,14 @@ push / pull_request (develop, main)
 - **SonarCloud is skipped, not softened.** With no token the step is omitted; with a
   token it is strict. This avoids `continue-on-error`, which would also hide real failures.
 - **No nonce-based CSP.** See 2.4 item 1.
-- **Semgrep runs from pip** instead of a marketplace action, so it works in private
+- **Semgrep runs from pip**, pinned to an exact version and installed with `--only-binary :all:`
+  so no setup script runs. It is not a marketplace action, so it works in private
   repositories without a Semgrep account.
+- **Supply-chain hardening.** Every third-party action is pinned to a full commit SHA
+  (the tag is kept in a comment), and `npm ci` runs with `--ignore-scripts`. Both were
+  raised by SonarCloud on the first run (rules S6505, S7637, S8541, S8544).
+- **`typecheck` runs `next typegen` first.** Next.js generates global types such as
+  `LayoutProps` during the build; without that step a clean checkout fails to type-check.
 
 ---
 

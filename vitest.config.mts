@@ -17,6 +17,8 @@ export default defineConfig({
         "src/lib/math/**/*.ts",
         "src/lib/progression/{analytics,matching,goalActions}.ts",
         "src/lib/validation/**/*.ts",
+        // The HTTP security policy is a security decision, so it is covered too.
+        "next.config.ts",
       ],
       exclude: ["**/*.test.ts", "**/*.spec.ts", "**/__tests__/**"],
       thresholds: {

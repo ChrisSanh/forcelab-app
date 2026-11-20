@@ -5,6 +5,7 @@ import {
   usesCycles,
 } from "@/lib/math/progressionEngine";
 import type { MuscleGroup, ProgressionType, UserGoal } from "@/lib/types";
+import { firstError, goalSchema, newPrSchema } from "@/lib/validation/schemas";
 
 export interface GoalFormValues {
   exerciseName: string;
@@ -25,22 +26,9 @@ function fail(prefix: string, error: { message: string; details?: string | null 
   return { ok: false, message: `${prefix} (${error.message}${error.details ? ` — ${error.details}` : ""})` };
 }
 
-/** Validates the form and returns a Spanish message for the first problem found. */
+/** Validates the form with the shared Zod schema; returns the first Spanish message, or null. */
 export function validateGoal(values: GoalFormValues): string | null {
-  if (!values.exerciseName.trim()) return "Escribe el nombre del ejercicio.";
-  const strength = usesCycles(values.progressionType) || values.progressionType === "linear_progression";
-  if (usesCycles(values.progressionType)) {
-    if (!values.currentPrKg || values.currentPrKg <= 0) return "Ingresa tu marca actual (1RM) en kg.";
-  }
-  if (strength && values.targetPrKg != null && values.currentPrKg != null && values.targetPrKg <= values.currentPrKg) {
-    return "La marca objetivo debe ser mayor que la actual.";
-  }
-  if (values.repRangeMin < 1 || values.repRangeMax < values.repRangeMin) {
-    return "El rango de repeticiones no es válido.";
-  }
-  if (values.targetSets < 1 || values.targetSets > 10) return "Las series deben estar entre 1 y 10.";
-  if (values.incrementStepKg <= 0) return "El incremento debe ser mayor que 0.";
-  return null;
+  return firstError(goalSchema.safeParse(values));
 }
 
 /** Defaults that depend on the progression type. */
@@ -160,11 +148,10 @@ export async function registerNewPr(
   goal: UserGoal,
   newPrKg: number,
 ): Promise<ActionResult> {
-  if (!Number.isFinite(newPrKg) || newPrKg <= 0) return { ok: false, message: "Ingresa un PR válido en kg." };
   const previous = Number(goal.current_pr_kg ?? 0);
-  if (newPrKg <= previous) {
-    return { ok: false, message: `El nuevo PR debe superar tu marca actual (${previous} kg).` };
-  }
+  const parsed = newPrSchema(previous).safeParse({ newPrKg });
+  if (!parsed.success) return { ok: false, message: firstError(parsed) ?? "PR no válido." };
+  newPrKg = parsed.data.newPrKg as number;
 
   const { error } = await supabase
     .from("user_goals")

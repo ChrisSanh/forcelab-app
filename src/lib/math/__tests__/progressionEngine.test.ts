@@ -10,7 +10,7 @@ import {
   usesCycles,
   workingSets,
   type LoggedSet,
-} from "./progressionEngine";
+} from "../progressionEngine";
 
 const set = (weightKg: number, reps: number, rir: number | null = 2): LoggedSet => ({
   weightKg,

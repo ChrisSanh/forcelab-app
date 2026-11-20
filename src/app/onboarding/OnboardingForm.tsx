@@ -5,6 +5,7 @@ import { useState, type FormEvent } from "react";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { DEFAULT_SPLIT } from "@/lib/presets/defaultSplit";
+import { firstError, onboardingSchema } from "@/lib/validation/schemas";
 import type { Methodology } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,11 +13,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-function toNumber(value: string): number | null {
-  const n = Number(value.replace(",", "."));
-  return Number.isFinite(n) && value.trim() !== "" ? n : null;
-}
 
 export function OnboardingForm({
   methodologies,
@@ -43,14 +39,15 @@ export function OnboardingForm({
     e.preventDefault();
     setError(null);
 
-    const bw = toNumber(bodyweight);
-    const cur = toNumber(currentPr);
-    const tgt = toNumber(targetPr);
-    if (!bw || bw < 30 || bw > 300) return setError("Ingresa un peso corporal válido (30–300 kg).");
-    if (!startDate) return setError("Indica la fecha en que empezaste a entrenar.");
-    if (!cur || cur <= 0) return setError("Ingresa tu PR actual de press de banca.");
-    if (!tgt || tgt <= cur) return setError("Tu PR objetivo debe ser mayor que tu PR actual.");
-    if (!methodologyId) return setError("Elige una metodología.");
+    const parsed = onboardingSchema.safeParse({
+      bodyweightKg: bodyweight,
+      trainingStartDate: startDate,
+      currentPrKg: currentPr,
+      targetPrKg: targetPr,
+      methodologyId,
+    });
+    if (!parsed.success) return setError(firstError(parsed));
+    const { bodyweightKg: bw, trainingStartDate, currentPrKg: cur, targetPrKg: tgt } = parsed.data;
 
     setLoading(true);
     const supabase = createClient();
@@ -58,7 +55,7 @@ export function OnboardingForm({
     // The profile row is created by the signup trigger, so we only update it.
     const { error: profileError } = await supabase
       .from("profiles")
-      .update({ bodyweight_kg: bw, training_start_date: startDate, updated_at: new Date().toISOString() })
+      .update({ bodyweight_kg: bw, training_start_date: trainingStartDate, updated_at: new Date().toISOString() })
       .eq("id", userId);
     if (profileError) {
       setLoading(false);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { brzycki, calculateE1rm, loadForPercent } from "./e1rm";
+import { brzycki, calculateE1rm, loadForPercent } from "../e1rm";
 
 describe("calculateE1rm", () => {
   it("returns the load itself for a single rep at RIR 0", () => {

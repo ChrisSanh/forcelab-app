@@ -93,7 +93,8 @@ jobs:
 
       # Pinned version and wheels only: pip never runs a source build or setup script.
       - name: Install Semgrep (pinned, wheels only)
-        run: python3 -m pip install --quiet --only-binary :all: "semgrep==${SEMGREP_VERSION}"
+        run: |
+          python3 -m pip install --quiet --only-binary :all: "semgrep==${SEMGREP_VERSION}"
 
       - name: SAST (Semgrep)
         run: |

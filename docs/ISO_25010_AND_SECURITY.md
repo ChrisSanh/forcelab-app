@@ -159,6 +159,10 @@ push / pull_request (develop, main)
 
 ## 4. Local verification
 
+Validate the workflow file with [actionlint](https://github.com/rhysd/actionlint) before pushing it:
+a YAML parser alone accepts files that GitHub rejects (a :all: token in an unquoted value broke the first version).
+
+
 Run before every commit to `develop`:
 
 ```bash

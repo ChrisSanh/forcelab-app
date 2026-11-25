@@ -64,8 +64,8 @@ Taken from `git show --stat` of each commit. Full listing of the resulting tree:
 Files such as `e1rm.ts`, `defaultSplit.ts`, the shadcn `ui/` components and `AuthForm.tsx` come from Sprint 1 or earlier and were not touched by these commits.
 
 ### This handoff block (docs only)
-- **New:** `docs/PROJECT_STATE.md`, `docs/sprints/SPRINT_2_AND_DEVSECOPS_HANDOFF.md`.
-- **Modified:** `CLAUDE.md` (new section 8, Protocolo de Sincronización con Arquitecto).
+- **New:** `docs/PROJECT_STATE.md`, `docs/sprints/SPRINT_2_AND_DEVSECOPS_HANDOFF.md`, `supabase/migrations/20261125_baseline_schema.sql` (documentation of the live schema).
+- **Modified:** `CLAUDE.md` (new section 8, Protocolo de Sincronización con Arquitecto), `docs/ISO_25010_AND_SECURITY.md` (verified RLS evidence and database limits).
 
 ---
 
@@ -115,30 +115,38 @@ partial prerender; `/workout/[day]` dynamic with partial prerender. Proxy detect
 - Latest runs of GitHub Actions and SonarCloud (they run remotely; check the Actions tab).
 - Whether `SONAR_TOKEN` and the other secrets are configured.
 - `npm audit`, gitleaks and Semgrep were **not** run locally in this session.
-- The live Supabase schema and RLS policies (see section 5).
+- The `auth.users` trigger that calls `handle_new_user()` and the table grants (not in the catalog output the user pasted; see section 5).
 
 ---
 
-## 5. Pending SQL (action for the user)
+## 5. Database verification and pending SQL
 
-There is **no new SQL to run for this handoff**: this block changed only documentation.
+**Verified on 2026-11-25.** The user ran catalog queries in the Supabase SQL editor and pasted the results.
+The schema is now committed as `supabase/migrations/20261125_baseline_schema.sql` (documentation only,
+**do not run it** against the live database) and PROJECT_STATE.md section 3 is marked verified.
 
-There is, however, a **gap that blocks a proper review of security**: the repository has no SQL for the
-tables `profiles`, `training_methodologies`, `user_programs`, `workout_logs`, `set_logs`, `user_goals` and
-`exercise_cycles`, nor for their RLS policies, the signup trigger on `profiles` or the CHECK constraints.
-They exist in Supabase (the app works) but were created by hand. To close this:
+Findings (details and IDs in PROJECT_STATE.md section 7):
+- RLS is enabled on all 7 tables and each has an `auth.uid()`-scoped policy (`training_methodologies`: public SELECT). CLAUDE.md 7.2 is met at table level.
+- **D16** no indexes on any foreign key or `user_id`.
+- **D17** missing CHECKs (`muscle_group`) and no UNIQUE on `exercise_cycles (goal_id, cycle_number)`.
+- **D18** `handle_new_user()` is `SECURITY DEFINER` without `SET search_path`, and its `username` derivation can collide on the UNIQUE column.
+- **D19-D24** role `public` instead of `authenticated`, no cross-table ownership check, cascade inconsistency, unused columns, app types diverging from the database.
 
-1. In the Supabase SQL editor (or `supabase db dump --schema public`), export the DDL, the RLS policies
-   (`select * from pg_policies where schemaname = 'public'`) and the triggers.
-2. Commit the result to `supabase/migrations/` (for example `20261125_baseline_schema.sql`).
-3. Confirm that every table has `ENABLE ROW LEVEL SECURITY` and a policy scoped to `auth.uid()`
-   (`training_methodologies`: public `SELECT` only), as CLAUDE.md 7.2 requires.
-4. Update PROJECT_STATE.md section 3 from "inferred" to "verified".
+**SQL pending for the user: none was applied.** Nothing in this block changed the live database. The fixes
+above are proposals; each one needs a decision and a migration that the user runs by hand. Suggested next step:
+one migration for D16 (indexes) and D17 (CHECKs and the UNIQUE), and one for D18 (`SET search_path = ''` and a collision-proof username).
+
+Still to capture (run in the SQL editor and paste):
+
+```sql
+select tgname, pg_get_triggerdef(oid) from pg_trigger
+where tgrelid = 'auth.users'::regclass and not tgisinternal;
+```
 
 ---
 
 ## 6. Open items handed to the next sprint
 
 Full list with sources: PROJECT_STATE.md section 7. Highest priority:
-**D1** schema not in version control; **D3** cycle advance from the browser (move to a Server Action or Postgres function keyed by `workout_id`);
+**D16-D18** database indexes, CHECKs/UNIQUE and the signup function (new, from the live schema); **D3** cycle advance from the browser (move to a Server Action or Postgres function keyed by `workout_id`);
 **D2** exercise catalog with a stable key; **D5** `/goals` missing from the proxy matcher and `PROTECTED_PREFIXES`.

@@ -5,7 +5,7 @@ and, separately, what is known to be missing. Nothing here is aspirational.
 
 - **Scope:** web application `forcelab-app` (Next.js 16, Supabase, Vercel).
 - **Branching:** work on `develop`, promote to `main` through a pull request.
-- **Last reviewed:** Sprint 2 close (2026-11-20).
+- **Last reviewed:** 2026-11-25 (Sprint 2 close; database verified against live Supabase).
 
 ---
 
@@ -47,7 +47,7 @@ analytics and matching modules. UI components are not part of the threshold.
 
 | Risk | Control | Where |
 | :--- | :--- | :--- |
-| **A01 Broken access control** | Row Level Security on every table with policies scoped to `auth.uid()`. Route protection in the proxy; server pages re-check the user. | Supabase policies, `src/proxy.ts`, `src/lib/supabase/middleware.ts` |
+| **A01 Broken access control** | Row Level Security on every table with policies scoped to `auth.uid()`. Route protection in the proxy; server pages re-check the user. | Supabase policies (verified live 2026-11-25: RLS on 7 of 7 tables), `src/proxy.ts`, `src/lib/supabase/middleware.ts` |
 | **A02 Cryptographic failures** | HSTS with preload and `upgrade-insecure-requests` in production; session cookies managed by `@supabase/ssr`. | `next.config.ts` |
 | **A03 Injection** | Zod validation of every user input before it reaches Supabase; the client uses parameterized queries; no `dangerouslySetInnerHTML`; CSP limits script sources. | `src/lib/validation/schemas.ts` |
 | **A04 Insecure design** | Validation limits mirror database constraints (`numeric(5,2)`, rir 0-5, enums). Realistic ceilings (600 kg per lift) block typo-sized values. | `schemas.ts` |
@@ -103,6 +103,13 @@ upgrade-insecure-requests                    (production only)
    data, but the real enforcement is RLS and the database constraints, because a
    direct API call bypasses any browser code. Server-side validation arrives with
    the Server Actions planned in FUTURE_IMPROVEMENTS #3.
+
+6. **Database hardening gaps found on 2026-11-25** (live catalog, tracked as D16-D24 in `docs/PROJECT_STATE.md`):
+   no indexes on `user_id` or foreign keys; no CHECK on `user_goals.muscle_group` and no range checks on numeric
+   columns; no UNIQUE on `exercise_cycles (goal_id, cycle_number)`; `handle_new_user()` is `SECURITY DEFINER` without
+   `SET search_path` and builds a UNIQUE `username` from the email; policies target role `public` rather than
+   `authenticated`; nothing prevents a row from referencing another user's `workout_id` or `goal_id`.
+   The first four are the cheapest to fix and the ones that matter most before real users arrive.
 
 ---
 

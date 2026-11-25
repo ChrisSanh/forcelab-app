@@ -3,14 +3,14 @@
 Maintained under CLAUDE.md section 8 (Protocolo de Sincronización con Arquitecto).
 Update it at the close of every Sprint and after every structural change.
 
-- **Snapshot:** close of Sprint 2 + DevSecOps / ISO/IEC 25010 (2026-11-25)
+- **Snapshot:** close of Sprint 2 + DevSecOps / ISO/IEC 25010 (2026-11-25); database section verified against live Supabase the same day
 - **Branch:** `develop` (promoted to `main` by pull request; `main` deploys to Vercel)
 - **Baseline commit:** `20f185c` (merge of PR #6)
 - **Latest handoff:** [SPRINT_2_AND_DEVSECOPS_HANDOFF.md](sprints/SPRINT_2_AND_DEVSECOPS_HANDOFF.md)
 
 How to read the evidence labels used below:
 **[verified]** = read from the repository or measured by running the command on 2026-11-25.
-**[inferred]** = reconstructed from application code; **not** confirmed against the live Supabase project.
+In section 3, **[verified]** means confirmed against the live Supabase catalog output pasted by the user.
 
 ---
 
@@ -84,93 +84,52 @@ Proxy matcher: `/dashboard/:path*`, `/onboarding/:path*`, `/workout/:path*`, `/l
 
 ---
 
-## 3. Database [inferred; see warning]
+## 3. Database [verified against live Supabase, 2026-11-25]
 
-> **Warning.** The repository contains **no SQL that creates any table**. The only migration,
-> `supabase/migrations/20261119_sprint1_columns.sql`, is a no-op comment file. The schema below
-> was reconstructed from `src/lib/types.ts`, every `.from(...)` call, the Zod limits and
-> CLAUDE.md section 5. **Column types, defaults, constraints, triggers and RLS policies must be
-> exported from the live Supabase project** (SQL editor or `supabase db dump --schema public`)
-> and committed to `supabase/migrations/`. Until then this section is not authoritative.
+Source: catalog queries run by the user in the Supabase SQL editor (`information_schema.columns`,
+`pg_constraint`, `pg_class` RLS flags, `pg_policies`, `pg_proc`, `pg_indexes`). Committed as
+[`supabase/migrations/20261125_baseline_schema.sql`](../supabase/migrations/20261125_baseline_schema.sql)
+(documentation only, do not run). **Not captured:** the trigger on `auth.users` that calls `handle_new_user()`
+(its definition was not in the output), grants, and any view or extension.
 
-### 3.1 Tables
+### 3.1 Tables (public schema, 7 tables)
 
-`profiles` (extends `auth.users`; the row is created by a signup trigger, the app only updates it)
+All `id` columns are `uuid default gen_random_uuid()` except `profiles.id` (= `auth.users.id`).
+`user_id` columns are `uuid not null` with FK to `profiles(id) on delete cascade` unless stated.
 
-| Column | Type (app view) | Notes |
-| :--- | :--- | :--- |
-| `id` | uuid | = `auth.users.id` |
-| `bodyweight_kg` | number \| null | Zod: 30-300 kg |
-| `training_start_date` | date \| null | Zod: not in the future |
-| `updated_at` | timestamptz | set by the app on update |
+| Table | Columns (type, null, default) |
+| :--- | :--- |
+| `training_methodologies` | `slug` text NN **unique**, `name` text NN, `description` text NN, `default_config` jsonb NN, `created_at` timestamptz |
+| `profiles` | `id` uuid PK FK `auth.users` cascade, `username` text **unique**, `sex` text default `'male'` CHECK in (male, female, other), `birth_date` date, `height_cm` numeric(5,2), `bodyweight_kg` numeric(5,2) NN default 80.0, `training_start_date` date NN default current_date, `injury_history` jsonb default `'[]'`, `created_at`, `updated_at`, `current_pr_kg` numeric(5,1), `target_pr_kg` numeric(5,1) |
+| `user_programs` | `user_id`, `methodology_id` FK `training_methodologies` (no cascade), `program_name` text NN, `split_structure` jsonb NN, `main_lift_name` text NN default `'Press de Banca Plano'`, `starting_pr_kg` / `current_pr_kg` / `target_pr_kg` numeric(5,2) NN (defaults 110 / 110 / 150), `is_active` bool default true, `created_at`, `routine` jsonb |
+| `workout_logs` | `user_id`, `program_id` FK `user_programs` **on delete set null**, `session_date` date NN default current_date, `day_label` text NN, `session_rpe` int CHECK 1-10, `joint_discomfort` int default 0 CHECK 0-10, `notes` text, `created_at` |
+| `set_logs` | `workout_id` FK `workout_logs` cascade NN, `user_id`, `exercise_name` text NN, `set_category` text NN CHECK (explosive_bilbo, heavy_strength, hypertrophy, warmup), `set_number` int NN, `weight_kg` numeric(5,2) NN, `reps` int NN, `rir` int CHECK 0-5, `bar_speed` text CHECK (explosive, fast, moderate, grind), `calculated_e1rm` numeric(5,2), `created_at`, `perceived_velocity` smallint CHECK 1-5 |
+| `user_goals` | `user_id`, `program_id` FK `user_programs` cascade, `exercise_name` text NN, `muscle_group` text NN, `progression_type` text NN default `'double_progression'` CHECK (4 types), `starting_pr_kg` / `current_pr_kg` / `target_pr_kg` numeric(5,2), `target_sets` int default 3, `rep_range_min` default 8, `rep_range_max` default 12, `increment_step_kg` numeric(4,2) default 2.5, `is_active` bool default true, `created_at`, `updated_at` |
+| `exercise_cycles` | `user_id`, `goal_id` FK `user_goals` cascade NN, `cycle_number` int NN default 1, `base_1rm_kg` numeric(5,2) NN, `current_prescribed_weight_kg` numeric(5,2) NN, `current_week_or_session` int NN default 1, `status` text default `'active'` CHECK (active, deload_recommended, pr_test_ready, completed), `started_at` default now(), `completed_at` |
 
-`training_methodologies` (public read catalog; the app selects `id, slug, name, description, default_config`, ordered by `created_at`)
+Columns the application never reads or writes: `profiles.{username, sex, birth_date, height_cm, injury_history, current_pr_kg, target_pr_kg}`,
+`user_programs.routine`, `workout_logs.{session_rpe, joint_discomfort, notes}`, `set_logs.perceived_velocity`.
+(`session_rpe`, `joint_discomfort`, `injury_history` and `perceived_velocity` look like the base for the planned biomechanical audit; this is an inference from the names.)
 
-`user_programs`
+### 3.2 RLS policies (7 of 7 tables have RLS enabled, none forced)
 
-| Column | Type | Notes |
-| :--- | :--- | :--- |
-| `id`, `user_id` | uuid | |
-| `methodology_id` | uuid \| null | |
-| `program_name` | text \| null | |
-| `is_active` | boolean | onboarding deactivates previous rows before inserting |
-| `split_structure` | jsonb \| null | `SplitPreset` |
-| `main_lift_name` | text | onboarding writes `"Press de Banca Plano"` |
-| `starting_pr_kg`, `current_pr_kg`, `target_pr_kg` | numeric | Sprint 1 main-lift PRs |
-| `created_at` | timestamptz | |
+| Table | Policy | Command | Expression |
+| :--- | :--- | :--- | :--- |
+| `profiles` | Users manage own profile | ALL | `auth.uid() = id` (USING and WITH CHECK) |
+| `user_programs`, `workout_logs`, `set_logs`, `user_goals`, `exercise_cycles` | Users manage own programs / workouts / sets / goals / cycles | ALL | `auth.uid() = user_id` (USING and WITH CHECK) |
+| `training_methodologies` | Public read methodologies | SELECT | `true` |
 
-`workout_logs`: `id`, `user_id`, `program_id` (nullable), `day_label` (nullable), `session_date` (date), `created_at`.
+All policies apply to role `public` (includes `anon`); `auth.uid()` is null for anonymous requests, so they match nothing.
+This satisfies CLAUDE.md 7.2 for table-level ownership. Gaps are listed as D16-D24 in section 7.
 
-`set_logs`
+### 3.3 Functions, triggers, indexes, migrations
 
-| Column | Type | Notes |
-| :--- | :--- | :--- |
-| `id`, `workout_id`, `user_id` | uuid | |
-| `exercise_name` | text | free text (Spanish label); see debt D2 |
-| `set_number` | int | Zod 1-50 |
-| `weight_kg` | numeric(5,2) | Zod max 600 |
-| `reps` | int | Zod 1-100 |
-| `set_category` | text enum | `explosive_bilbo` \| `heavy_strength` \| `hypertrophy` \| `warmup` |
-| `rir` | int \| null | CHECK 0-5 (per `schemas.ts` comment) |
-| `bar_speed` | text enum \| null | `explosive` \| `fast` \| `moderate` \| `grind` |
-| `calculated_e1rm` | numeric \| null | |
-| `created_at` | timestamptz | |
-
-`user_goals` (Sprint 2)
-
-| Column | Type | Notes |
-| :--- | :--- | :--- |
-| `id`, `user_id` | uuid | |
-| `program_id` | uuid \| null | |
-| `exercise_name` | text | Zod: <= 80 chars, letters/digits/simple signs |
-| `muscle_group` | text enum | `chest` \| `back` \| `legs` \| `shoulders` \| `arms` |
-| `progression_type` | text enum | `bilbo_cycle` \| `heavy_blocks` \| `double_progression` \| `linear_progression` |
-| `starting_pr_kg`, `current_pr_kg`, `target_pr_kg` | numeric \| null | |
-| `target_sets` | int | Zod 1-10 |
-| `rep_range_min`, `rep_range_max` | int | Zod 1-50, max >= min |
-| `increment_step_kg` | numeric | Zod (0, 20], multiple of 0.25 |
-| `is_active` | boolean | |
-| `created_at`, `updated_at` | timestamptz | |
-
-`exercise_cycles` (Sprint 2): `id`, `user_id`, `goal_id` (FK to `user_goals`), `cycle_number`,
-`base_1rm_kg`, `current_prescribed_weight_kg`, `current_week_or_session`,
-`status` (`active` | `deload_recommended` | `pr_test_ready` | `completed`), `started_at`, `completed_at` (nullable).
-
-### 3.2 RLS policies
-
-| Table | Required policy (CLAUDE.md 7.2) | Verified in repo? |
-| :--- | :--- | :--- |
-| `profiles`, `user_programs`, `workout_logs`, `set_logs`, `user_goals`, `exercise_cycles` | RLS enabled; policies scoped to `auth.uid()` (`id` for profiles, `user_id` elsewhere) | **No.** No policy SQL is committed |
-| `training_methodologies` | RLS enabled; public `SELECT` only | **No** |
-
-### 3.3 Migrations
-
-| File | Content | Active in Supabase |
-| :--- | :--- | :--- |
-| `20261119_sprint1_columns.sql` | Comment only: "no schema changes required" | Nothing to run |
-
-Sprint 2 tables (`user_goals`, `exercise_cycles`) were created by hand in the Supabase editor;
-that SQL is not in the repository. **Pending: export it** (see section 7, D1).
+- **Function** `public.handle_new_user()`: `SECURITY DEFINER`, inserts `(id, username = split_part(email, '@', 1))` into `profiles`.
+  No `SET search_path`. The `auth.users` trigger that invokes it is assumed to exist (the app relies on it) but was **not captured**.
+- **Indexes:** only the 7 primary keys plus `profiles_username_key` and `training_methodologies_slug_key`.
+  **No index on any foreign key or on `user_id`.**
+- **Migrations in the repo:** `20261119_sprint1_columns.sql` (comment only, nothing to run) and
+  `20261125_baseline_schema.sql` (documentation of the live schema, **do not run**).
 
 ### 3.4 Data flow of the application [verified]
 
@@ -360,7 +319,7 @@ Merged PRs: #1-#6. Vercel deploys `main`. Work happens on `develop`; the user pu
 
 | ID | Item | Source |
 | :--- | :--- | :--- |
-| D1 | **Schema not in version control.** No SQL for any table, RLS policy, signup trigger or constraint. Export from Supabase into `supabase/migrations/`. Until then RLS (the main A01 control) cannot be reviewed from the repo | this document, section 3 |
+| D1 | **Schema was not in version control.** Mostly closed on 2026-11-25 by `20261125_baseline_schema.sql`. Still missing: the `auth.users` trigger definition and grants. Run `select tgname, pg_get_triggerdef(oid) from pg_trigger where tgrelid = 'auth.users'::regclass and not tgisinternal;` | section 3 |
 | D2 | Goals and sets linked by free-text name; needs an exercise catalog with `exercise_key` | FUTURE_IMPROVEMENTS #2 |
 | D3 | Cycle counter advanced from the browser at "Terminar entrenamiento"; may skip or double-advance | FUTURE_IMPROVEMENTS #3 |
 | D4 | Bilbo/heavy load derived from two sources (last set vs `exercise_cycles.current_prescribed_weight_kg`) | FUTURE_IMPROVEMENTS #4 |
@@ -375,3 +334,12 @@ Merged PRs: #1-#6. Vercel deploys `main`. Work happens on `develop`; the user pu
 | D13 | No performance budget or Lighthouse gate; no cross-browser matrix; PWA and offline queue planned for Sprint 6 | ISO doc |
 | D14 | `README.md` is still the create-next-app boilerplate | repository |
 | D15 | `AGENTS.md` block is re-added by `next dev`; commit it with the next change that touches it | `AGENTS.md` |
+| D16 | **No indexes on foreign keys or `user_id`.** RLS evaluates `auth.uid() = user_id` on every query and the app filters `set_logs` by `user_id` ordered by `created_at`. Add indexes (for example `set_logs (user_id, created_at desc)`, `user_goals (user_id)`, `exercise_cycles (goal_id)`, `workout_logs (user_id)`) before data grows | `pg_indexes` |
+| D17 | **Missing CHECKs that Zod enforces only in the browser:** `user_goals.muscle_group` has no CHECK; no range checks on `weight_kg`, `reps`, `set_number`, `rep_range_*`, `target_sets`, `increment_step_kg`; no UNIQUE on `exercise_cycles (goal_id, cycle_number)`, so a double submit can create duplicate cycles. Direct API calls bypass the Zod layer (D8) | `pg_constraint` |
+| D18 | **`handle_new_user()` is `SECURITY DEFINER` without `SET search_path`** (Supabase linter warning; privilege-escalation hardening). It also derives `username` from the email local part, and `username` is `UNIQUE`: `ana@a.com` and `ana@b.com` collide, and the second signup can fail inside the trigger. The app does not use `username` | `pg_proc`, `AuthForm.tsx` |
+| D19 | **Policies target role `public` instead of `authenticated`.** Harmless today because `auth.uid()` is null for anon, but least privilege says `to authenticated`. `training_methodologies` is readable by anon, as intended | `pg_policies` |
+| D20 | **Ownership is not enforced across tables.** A policy checks only the row's own `user_id`; nothing stops inserting a `set_logs` or `exercise_cycles` row whose `workout_id` / `goal_id` belongs to another user (the FK only checks existence). Needs composite FKs or a trigger. Low exploitability (uuids are unguessable) but not impossible | `pg_constraint`, `pg_policies` |
+| D21 | `user_goals.program_id` cascades but `workout_logs.program_id` sets null, so deleting a program deletes its goals and cycles but keeps the workout history. Confirm this is intended | `pg_constraint` |
+| D22 | **Unused columns and duplicated PR storage:** `profiles.{current_pr_kg, target_pr_kg}` and `user_programs.routine` are unused; PRs live in `user_programs` and `user_goals`. Defaults (`bodyweight_kg` 80; program PRs 110 / 110 / 150) make a row created without onboarding values look real | `information_schema.columns` |
+| D23 | `user_programs.methodology_id` has no `on delete` rule (deleting a methodology that is in use fails) | `pg_constraint` |
+| D24 | App types diverge from the database: `UserProgram.split_structure` is `SplitPreset \| null` but the column is NOT NULL; `Profile` omits most real columns; `ExerciseCycle.status` and `started_at` are nullable in the database but typed non-null | `types.ts` vs catalog |

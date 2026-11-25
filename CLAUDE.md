@@ -96,3 +96,32 @@ lives in `docs/ISO_25010_AND_SECURITY.md`; keep it up to date when a control cha
 Runs on every push and pull request to `develop` and `main`. All of these must pass locally before a commit:
 `npm run lint`, `npm run typecheck`, `npm run test:coverage`, `npm run build`.
 CI also runs `npm audit --audit-level=high`, gitleaks (secrets), Semgrep (SAST) and SonarCloud.
+
+## 8. Protocolo de Sincronización con Arquitecto (Handoff Markdown)
+
+Mandatory and permanent. The architect (a person or another model) works from these files, not from the
+chat, so they must always match the repository. A sprint or structural change is not closed until both
+artifacts below are updated and committed.
+
+### 8.1 Living architecture file: `docs/PROJECT_STATE.md`
+Update it at the close of every Sprint and after every structural change (new route, table, engine,
+schema, pipeline step or dependency of weight). It must always contain:
+- (a) the current folder tree and routes of `src/`;
+- (b) the full database schema: tables, columns, RLS policies and the migrations active in Supabase;
+- (c) every mathematical/scientific engine and Zod schema with its function signatures;
+- (d) the Vitest coverage status (real numbers from `npm run test:coverage`) and the state of the
+  GitHub Actions and SonarCloud pipelines;
+- (e) known technical debt and pending items.
+
+### 8.2 Sprint handoffs: `docs/sprints/SPRINT_<N>_HANDOFF.md`
+At the close of every Sprint (or large block of changes) create one file, e.g.
+`SPRINT_3_HANDOFF.md`. It must summarize: requirements covered (REQ-X.X, as numbered in the master
+report), files created/modified, technical decisions, the results of `npm run test:coverage` and
+`npm run build`, and any pending SQL the user must run by hand in the Supabase editor.
+
+### 8.3 Rules for writing them
+- Record only what was verified: run the gates and paste the real numbers. Never invent results.
+- When something cannot be verified from the repository (for example the live RLS policies or an ID
+  that is not written anywhere), say so explicitly instead of filling the gap.
+- Update `docs/ISO_25010_AND_SECURITY.md` in the same commit when a security or quality control changes.
+- Commit on `develop` with `docs:` (e.g. `docs: update project state and sprint handoff`).

@@ -115,7 +115,7 @@ partial prerender; `/workout/[day]` dynamic with partial prerender. Proxy detect
 - Latest runs of GitHub Actions and SonarCloud (they run remotely; check the Actions tab).
 - Whether `SONAR_TOKEN` and the other secrets are configured.
 - `npm audit`, gitleaks and Semgrep were **not** run locally in this session.
-- The `auth.users` trigger that calls `handle_new_user()` and the table grants (not in the catalog output the user pasted; see section 5).
+- Table grants, views and extensions (not in the catalog output the user pasted).
 
 ---
 
@@ -136,12 +136,7 @@ Findings (details and IDs in PROJECT_STATE.md section 7):
 above are proposals; each one needs a decision and a migration that the user runs by hand. Suggested next step:
 one migration for D16 (indexes) and D17 (CHECKs and the UNIQUE), and one for D18 (`SET search_path = ''` and a collision-proof username).
 
-Still to capture (run in the SQL editor and paste):
-
-```sql
-select tgname, pg_get_triggerdef(oid) from pg_trigger
-where tgrelid = 'auth.users'::regclass and not tgisinternal;
-```
+The `auth.users` trigger was captured afterwards: `on_auth_user_created`, `AFTER INSERT ... EXECUTE FUNCTION handle_new_user()`. Still not captured: grants, views, extensions.
 
 ---
 

@@ -5,10 +5,7 @@
 -- pg_proc (public functions) and pg_indexes. It is not a pg_dump, so details the queries do
 -- not expose (column order inside constraints, grants, comments) may differ from the live DB.
 --
--- NOT CAPTURED: the trigger on auth.users that calls public.handle_new_user(). Its definition
--- was not in the pasted output. Export it with:
---   select tgname, pg_get_triggerdef(oid) from pg_trigger
---   where tgrelid = 'auth.users'::regclass and not tgisinternal;
+-- NOT CAPTURED: grants, views and extensions. The auth.users trigger was captured with pg_get_triggerdef.
 --
 -- Known gaps of the live schema are listed in docs/PROJECT_STATE.md section 7 (D16-D24).
 
@@ -168,14 +165,17 @@ create policy "Users manage own cycles" on public.exercise_cycles
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 -- ---------------------------------------------------------------------------
--- Signup function (called by a trigger on auth.users; trigger definition not captured).
--- Verbatim from pg_get_functiondef.
+-- Signup function and its trigger on auth.users. Verbatim from pg_get_functiondef / pg_get_triggerdef.
 -- ---------------------------------------------------------------------------
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
 security definer
 as $function$ BEGIN INSERT INTO public.profiles (id, username) VALUES (NEW.id, split_part(NEW.email, '@', 1)); RETURN NEW; END; $function$;
+
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function handle_new_user();
 
 -- ---------------------------------------------------------------------------
 -- Indexes: only the primary keys and the two UNIQUE constraints above exist.

@@ -89,8 +89,7 @@ Proxy matcher: `/dashboard/:path*`, `/onboarding/:path*`, `/workout/:path*`, `/l
 Source: catalog queries run by the user in the Supabase SQL editor (`information_schema.columns`,
 `pg_constraint`, `pg_class` RLS flags, `pg_policies`, `pg_proc`, `pg_indexes`). Committed as
 [`supabase/migrations/20261125_baseline_schema.sql`](../supabase/migrations/20261125_baseline_schema.sql)
-(documentation only, do not run). **Not captured:** the trigger on `auth.users` that calls `handle_new_user()`
-(its definition was not in the output), grants, and any view or extension.
+(documentation only, do not run). **Not captured:** grants, views and extensions. The `auth.users` trigger was captured and is documented in 3.3.
 
 ### 3.1 Tables (public schema, 7 tables)
 
@@ -125,7 +124,8 @@ This satisfies CLAUDE.md 7.2 for table-level ownership. Gaps are listed as D16-D
 ### 3.3 Functions, triggers, indexes, migrations
 
 - **Function** `public.handle_new_user()`: `SECURITY DEFINER`, inserts `(id, username = split_part(email, '@', 1))` into `profiles`.
-  No `SET search_path`. The `auth.users` trigger that invokes it is assumed to exist (the app relies on it) but was **not captured**.
+  No `SET search_path`.
+- **Trigger** `on_auth_user_created` on `auth.users`: `AFTER INSERT ... FOR EACH ROW EXECUTE FUNCTION handle_new_user()` (verified live; the function is referenced without schema qualification).
 - **Indexes:** only the 7 primary keys plus `profiles_username_key` and `training_methodologies_slug_key`.
   **No index on any foreign key or on `user_id`.**
 - **Migrations in the repo:** `20261119_sprint1_columns.sql` (comment only, nothing to run) and
@@ -319,7 +319,7 @@ Merged PRs: #1-#6. Vercel deploys `main`. Work happens on `develop`; the user pu
 
 | ID | Item | Source |
 | :--- | :--- | :--- |
-| D1 | **Schema was not in version control.** Mostly closed on 2026-11-25 by `20261125_baseline_schema.sql`. Still missing: the `auth.users` trigger definition and grants. Run `select tgname, pg_get_triggerdef(oid) from pg_trigger where tgrelid = 'auth.users'::regclass and not tgisinternal;` | section 3 |
+| D1 | **Schema was not in version control.** Mostly closed on 2026-11-25 by `20261125_baseline_schema.sql`. Trigger captured 2026-11-25. Still missing: grants. | section 3 |
 | D2 | Goals and sets linked by free-text name; needs an exercise catalog with `exercise_key` | FUTURE_IMPROVEMENTS #2 |
 | D3 | Cycle counter advanced from the browser at "Terminar entrenamiento"; may skip or double-advance | FUTURE_IMPROVEMENTS #3 |
 | D4 | Bilbo/heavy load derived from two sources (last set vs `exercise_cycles.current_prescribed_weight_kg`) | FUTURE_IMPROVEMENTS #4 |

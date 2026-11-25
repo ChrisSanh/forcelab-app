@@ -115,12 +115,12 @@ upgrade-insecure-requests                    (production only)
 
 ## 3. DevSecOps pipeline
 
-File: `.github/workflows/devsecops-ci.yml`. It runs on every push and pull
-request to `develop` and `main`, with three parallel jobs and `contents: read`
-permissions.
+File: `.github/workflows/devsecops-ci.yml`. It runs on every push to `main`, `develop` and the working-branch
+prefixes `feature/**`, `feat/**`, `bugfix/**`, `fix/**`, `hotfix/**`, `chore/**` and `docs/**`, and on every pull
+request to `develop` and `main`, with three parallel jobs and `contents: read` permissions.
 
 ```text
-push / pull_request (develop, main)
+push (main, develop, feature|feat|bugfix|fix|hotfix|chore|docs/**) / pull_request (develop, main)
    |
    +-- quality-and-tests : npm ci --ignore-scripts -> lint -> typecheck -> test:coverage -> build
    |
@@ -138,6 +138,43 @@ push / pull_request (develop, main)
 | Secrets | gitleaks | A secret is found in the history |
 | SAST | Semgrep (`p/security-audit`, `p/typescript`, `p/nextjs`, `p/owasp-top-ten`) | A finding is reported |
 | Quality gate | SonarCloud | The scan or its quality gate fails |
+
+### 3.0 Automatic pull request (Gitflow)
+
+File: `.github/workflows/auto-pr-to-develop.yml`. On every push to a working branch it opens (or refreshes) a pull
+request into `develop`, assigns and requests review from `ElWariBana`, and runs `gh pr merge --auto --squash`.
+
+Controls inside the workflow: default `contents: read`, the single job raises to `contents: write` and
+`pull-requests: write` (both needed by auto-merge); `persist-credentials: false`; the branch name is untrusted input
+and reaches the script only through an environment variable, never interpolated into the shell; it uses only the
+`gh` CLI of the runner, so there is no third-party action to pin; a branch with no commits ahead of `develop`
+opens nothing; a prefix outside the list fails the job.
+
+### 3.0.1 Repository settings the automation depends on (manual, not in code)
+
+The workflow requests auto-merge; **GitHub merges only if these settings exist**. Without them the merge either
+never happens or happens without the checks. Set them in GitHub (Settings):
+
+| Setting | Value | Why |
+| :--- | :--- | :--- |
+| Actions > General > Workflow permissions | "Allow GitHub Actions to create and approve pull requests" ON | `gh pr create` with `GITHUB_TOKEN` fails otherwise |
+| General > Pull Requests | "Allow auto-merge" ON; "Allow squash merging" ON | `gh pr merge --auto --squash` fails otherwise |
+| Branches > rule for `develop` | Require a pull request before merging; require approvals: 1; require status checks to pass | Without a rule, auto-merge merges immediately with no gate |
+| Same rule, required checks | `Quality and tests`, `Security audit (SCA, secrets, SAST)`, `SonarCloud` | Names are the `name:` of each job in `devsecops-ci.yml` |
+| Same rule | Require branches to be up to date; do not allow bypassing; restrict direct pushes | Enforces "never push to develop" on the server, not only in CLAUDE.md |
+| Same rule for `main` | Same, with PR from `develop` only | |
+
+Known limits:
+1. **The `SonarCloud` check passes vacuously when `SONAR_TOKEN` is missing**: the job succeeds and only skips the scan.
+   Making it required is meaningless until the token is configured (see 3.1).
+2. **A PR created with `GITHUB_TOKEN` does not trigger `pull_request` workflows.** This is why `devsecops-ci.yml`
+   also runs on `push` to the working-branch prefixes: those runs attach their results to the same commit, and the
+   PR picks them up as status checks. Removing the branch triggers from the CI file would leave the PR with no checks.
+3. **Review requirement (not verified):** the PR is created with `GITHUB_TOKEN`, so its author should be
+   `github-actions[bot]`, which would let `ElWariBana` approve it (GitHub does not let an author approve their own PR).
+   Confirm this on the first real PR.
+4. `auto-pr-to-develop.yml` runs on every push to the branch; the PR body is refreshed each time.
+5. If someone opens a PR by hand, the CI runs twice (once for the `push`, once for the `pull_request`). Accepted cost.
 
 ### 3.1 Required repository secrets
 

@@ -287,13 +287,15 @@ Coverage scope (`vitest.config.mts`): `src/lib/math/**`, `src/lib/progression/{a
 
 ### 5.3 GitHub Actions: `.github/workflows/devsecops-ci.yml` [verified from file]
 
-Triggers: push and pull request to `develop` and `main`. Permissions `contents: read`. Node 24. Actions pinned by SHA.
+Triggers: push to `main`, `develop` and `feature|feat|bugfix|fix|hotfix|chore|docs/**`; pull request to `develop` and `main`. Permissions `contents: read`. Node 24. Actions pinned by SHA.
 
 | Job | Steps |
 | :--- | :--- |
 | `quality-and-tests` | `npm ci --ignore-scripts`, lint, typecheck, `test:coverage`, build (uses secrets `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`), upload `coverage/` artifact |
 | `security-audit` | `npm audit --audit-level=high`, gitleaks, Semgrep 1.186.0 (`p/security-audit`, `p/typescript`, `p/nextjs`, `p/owasp-top-ten`, `--error`, scans `src`) |
 | `sonarcloud` | `test:coverage`, then scan only if `SONAR_TOKEN` exists (otherwise skipped with a notice) |
+
+**`.github/workflows/auto-pr-to-develop.yml`** (added on `chore/gitflow-devsecops-automation`): on push to a working-branch prefix it opens or refreshes a PR into `develop` (title from the branch name), assigns and requests review from `ElWariBana`, and runs `gh pr merge --auto --squash`. It only works with the repository settings in `docs/ISO_25010_AND_SECURITY.md` 3.0.1, which are **not verifiable from the repo** (auto-merge, branch protection of `develop`, required checks). Validated locally with PyYAML, `bash -n` and a simulated `gh`; **not yet run on GitHub**.
 
 SonarCloud (`sonar-project.properties`): project `ElWariBana_forcelab-app`, organization `elwaribana`,
 sources `src`, lcov from `coverage/lcov.info`, coverage excludes tests and `src/components/ui/**`.
@@ -310,7 +312,7 @@ CSP (no nonce, `'unsafe-inline'` for script/style, `'unsafe-eval'` in dev only),
 
 ## 6. Branches and deployment
 
-Remote branches: `main`, `develop`, `feature/devsecops-iso25010`, `feature/sprint-2-goals-progression`.
+Gitflow: never push to `main`/`develop`; work on prefixed branches (CLAUDE.md section 3). Remote branches: `main`, `develop`, `feature/devsecops-iso25010`, `feature/sprint-2-goals-progression`.
 Merged PRs: #1-#6. Vercel deploys `main`. Work happens on `develop`; the user pushes (Claude only commits).
 
 ---

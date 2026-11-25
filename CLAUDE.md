@@ -11,9 +11,20 @@ ForceLab is a science-based, multi-tenant strength & hypertrophy SaaS web applic
   - All code, file names, variables, TypeScript interfaces, database tables/columns, and git commits MUST be in **English**.
   - All user-facing UI text, labels, alerts, and fitness terminology MUST be in **Spanish** (Chilean/neutral Spanish).
 
-## 3. Git Workflow Rules
-- **Active Development Branch:** Always work on `develop`. Never commit directly to `main`.
-- **Commit Convention:** Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`).
+## 3. Git Workflow Rules (Gitflow + automated DevSecOps)
+- **Never push directly to `main` or `develop`.** Every Sprint, feature or bugfix is developed on its own branch
+  with a valid prefix, and that branch is what gets pushed. Valid prefixes: `feature/`, `feat/`, `bugfix/`, `fix/`,
+  `hotfix/`, `chore/`, `docs/`. Examples: `feat/sprint-3-biomechanical-auditor`, `fix/login-redirect`.
+- **Automatic flow on push** (`.github/workflows/`):
+  1. `devsecops-ci.yml` runs on the branch: quality-and-tests, security-audit (npm audit, gitleaks, Semgrep) and SonarCloud.
+  2. `auto-pr-to-develop.yml` opens (or refreshes) a pull request into `develop` with a semantic title taken from the
+     branch name, assigns and requests review from the Product Owner (`ElWariBana`) and arms auto-merge (squash).
+  3. GitHub merges only when the required checks and the review pass. That gate is the branch protection of `develop`;
+     the repository settings it needs are in `docs/ISO_25010_AND_SECURITY.md` section 3.0.1.
+- **Who pushes:** the user pushes. Claude creates the branch locally and commits; it never runs `git push`.
+  Documentation and handoff work goes on a `docs/` branch, never on `develop`.
+- **Commit Convention:** Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`). The PR title is built
+  from the branch prefix (`feature`/`feat` -> `feat`, `bugfix`/`fix`/`hotfix` -> `fix`), so name branches accordingly.
 
 ## 4. Directory Structure
 ```text
@@ -124,4 +135,4 @@ report), files created/modified, technical decisions, the results of `npm run te
 - When something cannot be verified from the repository (for example the live RLS policies or an ID
   that is not written anywhere), say so explicitly instead of filling the gap.
 - Update `docs/ISO_25010_AND_SECURITY.md` in the same commit when a security or quality control changes.
-- Commit on `develop` with `docs:` (e.g. `docs: update project state and sprint handoff`).
+- Commit on a `docs/` branch (never on `develop`) with `docs:` (e.g. `docs: update project state and sprint handoff`); see section 3.

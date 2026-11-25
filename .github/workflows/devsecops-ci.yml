@@ -2,7 +2,16 @@ name: DevSecOps CI
 
 on:
   push:
-    branches: [develop, main]
+    branches:
+      - main
+      - develop
+      - "feature/**"
+      - "feat/**"
+      - "bugfix/**"
+      - "fix/**"
+      - "hotfix/**"
+      - "chore/**"
+      - "docs/**"
   pull_request:
     branches: [develop, main]
 

@@ -1,0 +1,119 @@
+name: Auto PR to develop
+
+# Gitflow: every working branch opens (or refreshes) a pull request into develop,
+# assigns and requests review from the Product Owner, and arms auto-merge.
+# Auto-merge only fires after the required status checks and the required review pass.
+# That gate is enforced by the branch protection of `develop`, NOT by this file.
+# See docs/ISO_25010_AND_SECURITY.md section 3.0.1 for the repository settings it needs.
+
+on:
+  push:
+    branches:
+      - "feature/**"
+      - "feat/**"
+      - "bugfix/**"
+      - "fix/**"
+      - "hotfix/**"
+      - "chore/**"
+      - "docs/**"
+
+# Default is read-only; the single job below raises what it needs.
+permissions:
+  contents: read
+
+# One run per branch, queued (not cancelled) so a PR is never left half configured.
+concurrency:
+  group: auto-pr-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  BASE_BRANCH: develop
+  PRODUCT_OWNER: ElWariBana
+
+jobs:
+  open-pr:
+    name: Open PR and arm auto-merge
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # `gh pr merge --auto` needs contents: write (it enables merging); the PR itself needs pull-requests: write.
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0 # the commit summary needs the history against develop
+          persist-credentials: false # gh uses GH_TOKEN; git never needs to push
+
+      # Only the gh CLI that ships with the runner is used: no third-party action to pin.
+      # The branch name is untrusted input, so it reaches the script through env vars only.
+      - name: Create or update the pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          prefix="${BRANCH%%/*}"
+          slug="${BRANCH#*/}"
+          case "$prefix" in
+            feature|feat)        type="feat" ;;
+            bugfix|fix|hotfix)   type="fix" ;;
+            chore)               type="chore" ;;
+            docs)                type="docs" ;;
+            *) echo "::error::Branch prefix '${prefix}' is not a Gitflow prefix."; exit 1 ;;
+          esac
+
+          # feat/sprint-3-biomechanical-auditor -> "feat: sprint 3 biomechanical auditor"
+          words="$(printf '%s' "$slug" | tr '/_-' '   ' | tr -s ' ' | sed -E 's/^ //; s/ $//')"
+          title="${type}: ${words}"
+
+          ahead="$(git rev-list --count "origin/${BASE_BRANCH}..HEAD")"
+          if [ "$ahead" -eq 0 ]; then
+            echo "::notice::${BRANCH} has no commits ahead of ${BASE_BRANCH}; no pull request needed."
+            exit 0
+          fi
+
+          {
+            echo "## Resumen"
+            echo
+            echo "Rama \`${BRANCH}\` hacia \`${BASE_BRANCH}\` (${ahead} commits)."
+            echo
+            echo "## Commits incluidos"
+            echo
+            git log --no-merges --reverse --pretty='- %s (`%h`)' "origin/${BASE_BRANCH}..HEAD"
+            echo
+            echo "## Validación"
+            echo
+            echo "Esta PR se fusiona sola (squash) cuando pasan todos los checks requeridos y la revisión del Product Owner."
+            echo
+            echo "_PR generada automáticamente por \`auto-pr-to-develop.yml\`._"
+          } > pr-body.md
+
+          existing="$(gh pr list --head "$BRANCH" --base "$BASE_BRANCH" --state open --json number --jq '.[0].number // empty')"
+
+          if [ -n "$existing" ]; then
+            pr="$existing"
+            gh pr edit "$pr" --body-file pr-body.md
+            echo "Updated pull request #${pr}."
+          else
+            url="$(gh pr create \
+              --base "$BASE_BRANCH" \
+              --head "$BRANCH" \
+              --title "$title" \
+              --body-file pr-body.md)"
+            pr="${url##*/}"
+            echo "Created pull request #${pr}: ${url}"
+          fi
+
+          # Notification for the Product Owner. Failure here must not block the auto-merge step.
+          gh pr edit "$pr" --add-assignee "$PRODUCT_OWNER" \
+            || echo "::warning::Could not assign ${PRODUCT_OWNER} to #${pr}."
+          gh pr edit "$pr" --add-reviewer "$PRODUCT_OWNER" \
+            || echo "::warning::Could not request a review from ${PRODUCT_OWNER} on #${pr}."
+
+          # Arms auto-merge. It waits for the required checks and reviews of `develop`.
+          # It fails (and is reported as a warning) when "Allow auto-merge" is off or when
+          # there is nothing to wait for; in both cases nothing is merged.
+          gh pr merge "$pr" --auto --squash \
+            || echo "::warning::Auto-merge was NOT armed on #${pr}. Enable 'Allow auto-merge' and protect '${BASE_BRANCH}' (see docs/ISO_25010_AND_SECURITY.md 3.0.1)."
